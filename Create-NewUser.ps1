@@ -1,7 +1,7 @@
 # created by Alan Bishop
-# last updated 1/2/2020
+# last updated 8/3/2020
 #
-# Launches a GUI that creates a user in AD and assigns them to the proper groups
+# Launches a GUI that creates a user in AD / Exchange 365 and assigns them to the proper groups
 
 
 # this function that creates the GUI
@@ -89,6 +89,7 @@ function createNewUser{
 	# if the token isn't found, try to pull it from network resources
 	if (-not (Test-Path $env:userprofile\allnew.enc))
 	{
+		# networki.txt : a network location, essentially  \\$server\$directory
 		$path = Get-Content '.\debloat files\networki.txt'
 		copy "$($path)Alan - working on\script\allnew.enc" $env:userprofile\allnew.enc 
 	}
@@ -127,6 +128,7 @@ function createNewUser{
 		} 
 
 		# create the UPN (email)
+		# email.txt : the email domain in the format  @$company.com
 		$upn = $sam+(Get-Content -Path '.\debloat files\email.txt')
 
 		$nonTemplateUser = $false
@@ -136,6 +138,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "CNA" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# cna.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$cnas = Get-Content -Path '.\debloat files\cna.txt'
 			foreach ($cna in $cnas)
 			{
@@ -150,6 +153,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "IPU CNA" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# ipucna.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$ipucnas = Get-Content -Path '.\debloat files\ipucna.txt'
 			foreach ($ipucna in $ipucnas)
 			{
@@ -164,6 +168,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "IPU RN" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# ipurn.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$ipurns = Get-Content -Path '.\debloat files\ipurn.txt'
 			foreach ($ipurn in $ipurns)
 			{
@@ -178,6 +183,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "RN" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# rn.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$rns = Get-Content -Path '.\debloat files\rn.txt'
 			foreach ($rn in $rns)
 			{
@@ -190,6 +196,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "NP" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# np.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$nps = Get-Content -Path '.\debloat files\np.txt'
 			foreach ($np in $nps)
 			{
@@ -202,6 +209,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "LPN" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# lpn.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$lpns = Get-Content -Path '.\debloat files\lpn.txt'
 			foreach ($lpn in $lpns)
 			{
@@ -214,6 +222,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "Chaplain" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# chap.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$chaps = Get-Content -Path '.\debloat files\chap.txt'
 			foreach ($chap in $chaps)
 			{
@@ -226,6 +235,7 @@ function createNewUser{
 			# add the user to AD, enable the account, mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "SW" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
+			# sw.txt : just a list of groups a person in this role should belong to, each group on a new line
 			$sws = Get-Content -Path '.\debloat files\sw.txt'
 			foreach ($sw in $sws)
 			{
@@ -247,6 +257,7 @@ function createNewUser{
 		# if the account was created, set the groups that everyone gets
 		if ($accountcreated)
 		{
+			# everyonegroups.txt : just a list of groups everyone goes in, each group on a new line
 			$egs = Get-Content -Path '.\debloat files\everyonegroups.txt'
 			foreach ($eg in $egs)
 			{
@@ -263,6 +274,7 @@ function createNewUser{
 			# top secret, or just some razzle dazzle. It's up to you to decide!
 			if (Test-Path "\script\psexec.exe")
 			{
+				# psexec.txt : a simple command that forces an Exchange 365 sync with on-site AD. Not required but is faster
 				$psexe = Get-Content -Path '.\debloat files\psexec.txt' 
 				Start-Process -FilePath PSExec -ArgumentList $psexe
 			}
