@@ -7,7 +7,7 @@
 # 		.\Add-EmailAccess.ps1 abishop@yourcompany.com 		gives abishop@yourcompany.com access
 # 		.\Add-EmailAccess.ps1 abishop						gives abishop access at default domain
 #
-# exchangeconnect.ps1 is a required dependency
+# exchangeconnect.ps1 and exchangedisconnect.ps1 are a required dependencies
 
 
 # email.txt : the email domain in the format  @$company.com
