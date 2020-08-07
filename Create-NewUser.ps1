@@ -1,5 +1,5 @@
 # created by Alan Bishop
-# last updated 8/3/2020
+# last updated 8/7/2020
 #
 # Launches a GUI that creates a user in AD / Exchange 365 and assigns them to the proper groups
 
@@ -111,6 +111,7 @@ function createNewUser{
 
 		# try to look for a SAM name that isn't taken, exiting loop when a free one is found
 		# eg: if jwilliams exists try jwilliams1, jwilliams2 etc 
+		# this solves edge case of matching first initial and matching last name
 		while ($nameExists -ne $Null)
 		{
 			# try a SamAccountName, first initial + last name, incrementing numbers until an opening is found
@@ -126,6 +127,14 @@ function createNewUser{
 			$nameExists = Get-ADUser -Filter {SAMAccountName -eq $sam}
 			$SAMincrementer = $SAMincrementer+1
 		} 
+
+		# if full name is taken, add the incrementer to it (the 2nd Jeff Williams becomes Jeff Williams1) 
+		# this solves edge case of two Jeff Williams
+		if ((Get-ADUser -Filter {DisplayName -eq $fullname}) -ne $Null)
+		{
+			$SAMincrementer--     #match SAM number to fullname number
+			$fullname = "$fullname $SAMincrementer"
+		}
 
 		# create the UPN (email)
 		# email.txt : the email domain in the format  @$company.com
