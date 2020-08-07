@@ -1,6 +1,6 @@
 # created by Alan Bishop
 # last updated 8/7/2020
-#
+# 
 # Launches a GUI that creates a user in AD / Exchange 365 and assigns them to the proper groups
 
 
