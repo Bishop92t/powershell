@@ -9,17 +9,17 @@
 
 if ($args.count -eq 0)
 {
-Write-Output '.\List-Users.ps1 save            save most properties to users.csv'
-Write-Output '.\List-Users.ps1 password        display regular users sorted by last time they reset their password'
-Write-Output '.\List-Users.ps1 locked          display list of locked accounts to userslocked.csv'
-Write-Output '.\List-Users.ps1 name $name      display info just about $name'
-Write-Output '.\List-Users.ps1 like $name      display user info for users with similar names to $name'
-Write-Output '.\List-Users.ps1 in $group       display all active users in $group'
-Write-Output '.\List-Users.ps1 notin $group    display all active users not in $group'
-Write-Output '.\List-Users.ps1 noexpire        display all active users whose password doesnt expire'
-Write-Output '.\List-Users.ps1 last            display active users sorted by last logon (all users)'
-Write-Output '.\List-Users.ps1 lastlogin       display when all active users last logged on (excluding service accounts)'
-Write-Output '.\List-Users.ps1 date            display a list of all users sorted by creation date'
+	Write-Output '.\List-Users.ps1 save            save most properties to users.csv'
+	Write-Output '.\List-Users.ps1 password        display regular users sorted by last time they reset their password'
+	Write-Output '.\List-Users.ps1 locked          display list of locked accounts to userslocked.csv'
+	Write-Output '.\List-Users.ps1 name $name      display info just about $name'
+	Write-Output '.\List-Users.ps1 like $name      display user info for users with similar names to $name'
+	Write-Output '.\List-Users.ps1 in $group       display all active users in $group'
+	Write-Output '.\List-Users.ps1 notin $group    display all active users not in $group'
+	Write-Output '.\List-Users.ps1 noexpire        display all active users whose password doesnt expire'
+	Write-Output '.\List-Users.ps1 last            display active users sorted by last logon (all users)'
+	Write-Output '.\List-Users.ps1 lastlogin       display when all active users last logged on (excluding service accounts)'
+	Write-Output '.\List-Users.ps1 date            display a list of all users sorted by creation date'
 }
 elseif ($args[0] -eq "save")
 {
