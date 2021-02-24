@@ -15,6 +15,7 @@
 # *********************************************************************************************************************************
 #
 # changelog:
+#   2/24/21  bug fixes on menu trimming
 #   2/14/21  removed options 2-4, added network connection safety tester, create auto restart scheduled task
 #   11/13/20 fix auto login bug
 #   11/2/20  UAC fix enabled
@@ -24,6 +25,13 @@
 #   6/16/20  switched to using the USB drive letter instead of assuming PS would figure it out. Used to work but perhaps a Windows/PS update broke it
 
 
+
+# setup helper function to test if PS is run as administrator
+function Test-Administrator
+{  
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent();
+    (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)  
+}
 
 Function generateForm
 {
@@ -41,14 +49,14 @@ Function generateForm
         {
             debloatWindows 4 "none"
         }
-        $form.Close()
+        exit
     }
     elseif ($env:username -eq "temp")
     {
         if (test-path "$env:userprofile\desktop\Debloat-Windows.ps1")
         {
             debloatWindows 2 "none"
-            $form.Close()
+            exit
         }
     }
 
@@ -125,7 +133,7 @@ Function generateForm
     $form.AcceptButton = $okButton
 
     # Compile and display the form
-    $form.controls.AddRange(@($roleTypeLabel,$radioButton1,$radioButton2,$radioButton3,$okButton,$computerNameLabel,$computerNameTextBox))
+    $form.controls.AddRange(@($roleTypeLabel,$radioButton1,$okButton,$computerNameLabel,$computerNameTextBox))
 
     # if radioButton1 is checked, computer name is required (disable button if no text)
     $radioButton1.Add_Click({
@@ -199,13 +207,6 @@ Function generateForm
 }
 
 
-# setup helper function to test if PS is run as administrator
-function Test-Administrator
-{  
-    $user = [Security.Principal.WindowsIdentity]::GetCurrent();
-    (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)  
-}
-
 
 function debloatWindows
 {
@@ -216,7 +217,12 @@ function debloatWindows
 
 
     # start a detailed log file of this script for troubleshooting
-    Stop-Transcript
+    try 
+    {
+        Stop-Transcript | out-null
+    }
+    catch [System.InvalidOperationException]{}
+
     Start-Transcript -path c:\logs\verbose.txt
 
     #
@@ -248,7 +254,10 @@ function debloatWindows
     }
 
     # close the option window, start progress box, and set it to center on page
-    $form.Dispose()
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    # this is out of scope, shouldn't be necessary anymore
+    # $form.Dispose()
     $form2  = New-Object system.Windows.Forms.Form
     $center = [System.Windows.Forms.FormStartPosition]::CenterScreen;
 
@@ -678,6 +687,8 @@ function debloatWindows
     # wait 1 second and close display box
     $roleTypeLabel.text += "`n `n Complete!"
     Start-Sleep 5
+
+
 }
 
 
