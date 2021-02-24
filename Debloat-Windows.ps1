@@ -1,5 +1,4 @@
 # created by Alan Bishop 
-# updated 9/18/2020
 #
 # *********************************************************************************************************************************
 #
@@ -14,16 +13,45 @@
 #   Run 4: run as end user 
 #
 # *********************************************************************************************************************************
+#
 # changelog:
-#   9/18/20 bug fixes: duplicate variable names, typo, turn off screen res change
-#   8/24/20 auto connect to WiFi fixed
-#   8/6/20  gearing up to break this beast into more manageable modules
-#   6/16/20 switched to using the USB drive letter instead of assuming PS would figure it out. Used to work but perhaps a Windows/PS update broke it
+#   2/14/21  removed options 2-4, added network connection safety tester, create auto restart scheduled task
+#   11/13/20 fix auto login bug
+#   11/2/20  UAC fix enabled
+#   9/18/20  bug fixes: duplicate variable names, typo, turn off screen res change
+#   8/24/20  auto connect to WiFi fixed
+#   8/6/20   gearing up to break this beast into more manageable modules
+#   6/16/20  switched to using the USB drive letter instead of assuming PS would figure it out. Used to work but perhaps a Windows/PS update broke it
 
 
 
 Function generateForm
 {
+    # logged in as temp and no flag file : option 1 (continue with form)
+    # logged in as temp and flag file : option 2 (skip form)
+    # logged in not as temp, but admin rights : option 3 (skip form)
+    # logged in not as temp, and not admin : option 4 (skip form)
+    if ($env:username -ne "temp")
+    {   
+        if (Test-Administrator)
+        {
+            debloatWindows 3 "none"
+        }
+        else
+        {
+            debloatWindows 4 "none"
+        }
+        $form.Close()
+    }
+    elseif ($env:username -eq "temp")
+    {
+        if (test-path "$env:userprofile\desktop\Debloat-Windows.ps1")
+        {
+            debloatWindows 2 "none"
+            $form.Close()
+        }
+    }
+
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     $form = New-Object system.Windows.Forms.Form
@@ -43,7 +71,7 @@ Function generateForm
     $radioButton1          = New-Object system.Windows.Forms.RadioButton
     $radioButton1.Location = New-Object System.Drawing.Size(10, 45)
     $radioButton1.Size     = New-Object System.Drawing.Size(400,30)
-    $radioButton1.Checked  = $false
+    $radioButton1.Checked  = $true
     $radioButton1.Font     = 'Microsoft Sans Serif,12'
     $radioButton1.text     = "1st: logged in as temp user (run as admin)"
     $form.controls.Add($radioButton1)
@@ -149,6 +177,7 @@ Function generateForm
         }
     })
 
+
     # if $okButton is clicked, run debloatWindows function
     $okButton.Add_Click({ 
         if ($radioButton1.Checked -eq $true)
@@ -185,6 +214,7 @@ function debloatWindows
         [Parameter(Mandatory=$true, Position=1)] [string] $computerName
     )
 
+
     # start a detailed log file of this script for troubleshooting
     Stop-Transcript
     Start-Transcript -path c:\logs\verbose.txt
@@ -208,7 +238,7 @@ function debloatWindows
     Add-Content $logFile ("`n `n Starting on $date `n")
 
     # determines where the script is being run from, some pc's seem to struggle with this (PS ver issue?)
-    $drives       = Get-WmiObject Win32_Volume -Filter "DriveType='2'" | select -expand driveletter
+    $drives = Get-WmiObject Win32_Volume -Filter "DriveType='2'" | select -expand driveletter
     foreach ($drive in $drives)
     {   
         if (test-path "$($drive)\Debloat-Windows.bat")
@@ -383,6 +413,7 @@ function debloatWindows
 
     # since Qliq is garbage software, it has to be installed on every user
     # (notice it will install all QliqConnect versions on USB drive, so keep only the latest version on USB)
+    # ((you can rename the old Qliq to anything as long as it doesn't have "QliqConnect" anywhere in the name))
     if (-not (Test-Path $env:userprofile\AppData\Roaming\Qliqsoft))
     {
         $timeStarted = get-date -format HH:mm
@@ -429,12 +460,13 @@ function debloatWindows
         # remove OneDrive
         REG ADD "HKEY_CLASSES_ROOT\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /v SystemIsPinnedToNameSpaceTree /t REG_DWORD /d 0 /f
 
-        # this last section forces UAC back on
-        # setup the area we'll be working in
+
+
+        # this last section forces UAC back on, so setup the area we'll be working in
         $Key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" 
 
         # 2 and 1 are always notify, 5 and 1 is the default, 5 and 0 does not dim desktop
-        $ConsentPromptBehaviorAdmin_Value = 2  
+        $ConsentPromptBehaviorAdmin_Value = 5  
         $PromptOnSecureDesktop_Value = 1 
 
         # if UAC registry key not found, create it
@@ -443,9 +475,11 @@ function debloatWindows
             New-Item -ItemType Directory -Path $key | Out-Null 
         }
 
-        # set the two two registry values
+        # set the registry values
         Set-ItemProperty -Path $key -Name "ConsentPromptBehaviorAdmin" -Value $ConsentPromptBehaviorAdmin_Value -Type "Dword"  
         Set-ItemProperty -Path $key -Name "PromptOnSecureDesktop" -Value $PromptOnSecureDesktop_Value -Type "Dword"  
+        Set-ItemProperty -Path $key -Name "EnableLUA" -Value 1 -Type "Dword"
+
     }
 
     ######################################################
@@ -546,8 +580,9 @@ function debloatWindows
     REG ADD HKCU\Software\Microsoft\Windows\CurrentVersion\Search /v BackgroundAppGlobalToggle /t REG_DWORD /d 0 /f
     REG ADD "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes" /v ThemeChangesDesktopIcons /t REG_DWORD /d 1 /f
 
-    # fix a rare bug with temp account not disappearing
+    # fix a bug with temp account not disappearing or trying to auto logon
     REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon /t REG_DWORD /d 0 /f
+    Remove-Item "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\DefaultUserName" -ErrorAction SilentlyContinue
 
     # remove 3d objects, music, videos
     Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}" -ErrorAction SilentlyContinue
@@ -557,6 +592,8 @@ function debloatWindows
     Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{f86fa3ab-70d2-4fc7-9c99-fcbf05467f3a}" -ErrorAction SilentlyContinue
     Remove-Item -Path "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{f86fa3ab-70d2-4fc7-9c99-fcbf05467f3a}" -ErrorAction SilentlyContinue
 
+    # turn off tablet mode
+    REG ADD HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell /v TabletMode /t REG_DWORD /d 0 /f
 
     # setting power parameters
     powercfg -change -monitor-timeout-ac 30
@@ -567,14 +604,43 @@ function debloatWindows
     powercfg -change -hibernate-timeout-dc 120
     powercfg -change -disk-timeout-ac 0
 
-
     # set the time zone to be Central time
     Set-TimeZone -Name "Central Standard Time"
+
+    # create a scheduled task to auto reboot computer
+    if ($runOption -eq 3)
+    {
+        # if the auto restart scheduled task isn't found, then create it
+        $gst = Get-ScheduledTask -taskname "auto restart" 2>$Null
+        if ($null -eq $gst)
+        {
+            $taskAction  = New-ScheduledTaskAction -execute "c:\Windows\System32\shutdown.exe" -Argument "-f -r"
+            $taskTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 4am
+            Register-ScheduledTask -Action $taskAction -Trigger $taskTrigger -TaskName "auto restart"
+            Set-ScheduledTask -TaskName "auto restart" -User "NT Authority\system" -Settings $(New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun)
+        }
+    }
 
     # if logged in as 'temp' account & this is first run, mark first run done and install Win 10 key
     # else it must be 2nd run so join domain and reboot PC
     if ($env:username -eq 'temp')
     {
+        # setting up to determine if machine is connected to ethernet
+        $notConnected = $true
+        $ethers = get-netadapter -name "ethernet*"
+        foreach ($ether in $ethers)
+        {
+            if ($ether.status -eq "Up")
+            {
+                $notConnected = $false
+            }
+        }
+        # if we can't find WiFi or connected ethernet warn user
+        if (($null -eq (get-netadapter -name "wi-fi*")) -and $notConnected) 
+        { 
+            [System.Windows.Forms.MessageBox]::Show("No Wi-Fi found. Machine must be connected to network to proceed safely. Ignore if machine is plugged into ethernet", "Warning")  
+        }
+
         # if first run, activate Windows, rename machine, reboot
         if ($runOption -eq 1)
         {
