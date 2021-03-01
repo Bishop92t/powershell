@@ -1,0 +1,77 @@
+# created by Alan Bishop
+# last modified 3/1/2021
+#
+# simple script to show a list of groups (excluding service and unused groups)
+#
+# usage: 
+# 	.\List-Groups.ps1  				    list all group names minus some excluded service account groups (can get out of date)
+# 	.\List-Groups.ps1 details 		list all groups with 1+ users (can show service account groups)
+# 	.\List-Groups.ps1 all			    list all groups 
+# 	.\List-Groups.ps1 user $name 	list all groups $name is in ($name is the users SAM name e.g. John Doe would be jdoe)
+#
+
+
+# set the group exclusion text file
+$excludedGroups = Get-Content '.\debloat files\excludedgroups.txt'
+
+# get all AD group names and categories (sorted alphabetically on name)
+$groups = (get-adgroup -Filter * | select SAMAccountName, GroupCategory | Sort-Object -Property SAMAccountName )
+
+# list all groups not in the group exclusion text file
+if ($args.count -eq 0)
+{
+	ForEach ($group in $groups)
+	{
+		# exclude any groups that are listed in the group exclusion text file above
+		if (-not ($excludedGroups -contains $group.SAMAccountName))
+		{
+			Write-Host $group.SAMAccountName
+		}
+	}
+}
+
+# list all groups with 1 or more members
+if ($args[0] -eq "details")
+{
+	# create a new object so this gets formatted correctly when it's done pulling out empty groups
+	[System.Collections.ArrayList]$printableGroups = $groups
+
+	Write-Host " "
+	Write-Host "this can take a minute, please be patient"
+	Write-Host " "
+
+	ForEach ($group in $groups)
+	{
+		# create a 'count' property for the $group object
+		$group | Add-Member -MemberType NoteProperty -Name Count -Value (Get-ADGroup -Identity $group.SAMAccountName -Properties Members).Members.Count
+
+		# if the number of members is >0, add the group object to the $printableGroup array of objects
+		if ($group.count -lt 1)
+		{
+			$printableGroups.Remove($group)
+		}
+	}
+	Write-Output $printableGroups
+}
+
+# list all groups
+if ($args[0] -eq "all")
+{
+	$printableGroups = New-Object -TypeName "System.Collections.ArrayList"
+
+	Write-Host " "
+	Write-Host "this can take a minute, please be patient"
+	Write-Host " "
+
+	ForEach ($group in $groups)
+	{
+		$group | Add-Member -MemberType NoteProperty -Name Count -Value ((Get-ADGroup -Identity $group.SAMAccountName -Properties Members).Members.Count)
+		$printableGroups.Add($group) | out-null
+	}
+	Write-Output $printableGroups
+}
+
+if ($args[0] -eq "user")
+{
+	Get-ADPrincipalGroupMembership $args[1] | select Name
+}
