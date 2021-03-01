@@ -1,5 +1,5 @@
 # created by Alan Bishop
-# last modified 10/14/2020
+# last modified 2/3/2021
 #
 # Various AD user account compiled info
 # usage:
@@ -11,7 +11,7 @@ if ($args.count -eq 0)
 {
 	Write-Output '.\List-Users.ps1 save            save most properties to users.csv'
 	Write-Output '.\List-Users.ps1 password        display regular users sorted by last time they reset their password'
-	Write-Output '.\List-Users.ps1 locked          display list of locked accounts to userslocked.csv'
+	Write-Output '.\List-Users.ps1 locked          display list of locked accounts'
 	Write-Output '.\List-Users.ps1 name $name      display info just about $name'
 	Write-Output '.\List-Users.ps1 like $name      display user info for users with similar names to $name'
 	Write-Output '.\List-Users.ps1 in $group       display all active users in $group'
@@ -20,6 +20,9 @@ if ($args.count -eq 0)
 	Write-Output '.\List-Users.ps1 last            display active users sorted by last logon (all users)'
 	Write-Output '.\List-Users.ps1 lastlogin       display when all active users last logged on (excluding service accounts)'
 	Write-Output '.\List-Users.ps1 date            display a list of all users sorted by creation date'
+	Write-Output '.\List-Users.ps1 forwarding      display a list of users with server-side email forwarding rules'
+	Write-Output '.\List-Users.ps1 emailrule       display a list of users with Outlook email rules (will show bad rules)'
+	Write-Output '.\List-Users.ps1 emailforward    display a list of users with Outlook email forwarding rules'
 }
 elseif ($args[0] -eq "save")
 {
@@ -112,4 +115,102 @@ elseif ($args[0] -eq "lastlogin")
 elseif ($args[0] -eq "date")
 {
 	Get-ADUser -filter * -properties * | Select DisplayName, WhenCreated | Sort-Object -Property WhenCreated
+}
+
+
+# for viewing server-side email forwarding rules
+elseif ($args[0] -eq "forwarding")
+{	
+	# if there is no connection to Office 365, then create
+	if($null -eq (get-pssession | where-object {$_.ComputerName -EQ 'outlook.office365.com'}))
+	{
+		.\exchangeconnect.ps1 | Out-Null
+		$connected = $true
+	}
+	# else set flag that connection wasnt established (so this script doesnt disconnect pre-existing)
+	else
+	{
+		$connected = $false
+	}
+	# view list of all mailboxes that have a forwarding address set on the server
+	Get-Mailbox -Resultsize Unlimited | where-object {($null -ne $_.ForwardingSmtpAddress) -or ($null -ne $_.ForwardingAddress)}
+	# if this script connected to Exchange, then disconnect, else do nothing
+	if ($connected)
+	{
+		.\exchangedisconnect.ps1
+	}
+}
+
+
+# for viewing a count of all client side (Outlook) email rules
+elseif ($args[0] -eq "emailrule")
+{
+	# to-do: drill down into rules more
+	# in the interim run this for more info:    get-inboxrule -mailbox user@domain.com | format-list
+	# Get-InboxRule -mailbox nbishop@hospicebr.org | select description
+
+	Write-Output "be patient, this one takes a while to run"
+
+	# if there is no connection to Office 365, then create
+	if($null -eq (get-pssession | where-object {$_.ComputerName -EQ 'outlook.office365.com'}))
+	{
+		.\exchangeconnect.ps1 | Out-Null
+		$connected = $true
+	}
+	# else set flag that connection wasnt established (so this script doesnt disconnect pre-existing)
+	else
+	{
+		$connected = $false
+	}
+	$mailboxes = Get-Mailbox
+	foreach ($mailbox in $mailboxes)
+	{
+		$numRules = (Get-InboxRule -mailbox $mailbox.UserPrincipalName).count
+		if ($numRules -gt 0)
+		{
+			Write-Output " $($mailbox.UserPrincipalName)   $($numRules)"
+		}
+	}
+	# if this script connected to Exchange, then disconnect, else do nothing
+	if ($connected)
+	{
+		.\exchangedisconnect.ps1
+	}
+}
+
+
+# for viewing client side (Outlook) forwarding email rules, differs from above by showing any client-side forwarding
+elseif ($args[0] -eq "emailforward")
+{
+	# to-do: drill down into rules more
+	# in the interim run this for more info:    get-inboxrule -mailbox user@domain.com | format-list
+	# Get-InboxRule -mailbox nbishop@hospicebr.org | select description
+
+	Write-Output "be patient, this one takes a while to run"
+
+	# if there is no connection to Office 365, then create
+	if($null -eq (get-pssession | where-object {$_.ComputerName -EQ 'outlook.office365.com'}))
+	{
+		.\exchangeconnect.ps1 | Out-Null
+		$connected = $true
+	}
+	# else set flag that connection wasnt established (so this script doesnt disconnect pre-existing)
+	else
+	{
+		$connected = $false
+	}
+	$mailboxes = Get-Mailbox
+	foreach ($mailbox in $mailboxes)
+	{
+		$rules = (Get-InboxRule -mailbox $mailbox.UserPrincipalName | ? {($null -ne $_.RedirectTo) -or ($null -ne $_.ForwardTo)})
+		if ($rules.count -gt 0)
+		{
+			Write-Output " $($mailbox.UserPrincipalName)   $($rules.Description)"
+		}
+	}
+	# if this script connected to Exchange, then disconnect, else do nothing
+	if ($connected)
+	{
+		.\exchangedisconnect.ps1
+	}
 }
