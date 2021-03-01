@@ -1,8 +1,12 @@
 # created by Alan Bishop
-# last updated 8/7/2020
-# 
+# last updated 2/14/2021
+#
 # Launches a GUI that creates a user in AD / Exchange 365 and assigns them to the proper groups
 
+
+# global variable, flagged true if an account was created
+$accountCreated = "false"
+$addedUsers = New-Object -TypeName psobject
 
 # this function that creates the GUI
 Function generateForm {
@@ -63,16 +67,30 @@ Function generateForm {
 	$createUserButton.text      = "Create User"
 	$createUserButton.width     = 90
 	$createUserButton.height    = 30
-	$createUserButton.location  = New-Object System.Drawing.Point(370,250)
+	$createUserButton.location  = New-Object System.Drawing.Point(270,250)
 	$createUserButton.Font      = 'Microsoft Sans Serif,10'
 	$createUserButton.ForeColor = "#000000"
 	$createUserButton.BackColor = "#dddddd"
 	$createUserButton.Visible   = $true
 
-	# Compile and display the form
-	$form.controls.AddRange(@($roleTypeLabel,$roleType,$createUserButton,$firstNameLabel,$firstTextBox,$lastNameLabel,$lastTextBox))
+	# setup the exit button
+	$exitButton           = New-Object system.Windows.Forms.Button
+	$exitButton.text      = "Sync and Exit"
+	$exitButton.width     = 120
+	$exitButton.height    = 30
+	$exitButton.location  = New-Object System.Drawing.Point(370,250)
+	$exitButton.Font      = 'Microsoft Sans Serif,10'
+	$exitButton.ForeColor = "#000000"
+	$exitButton.BackColor = "#dddddd"
+	$exitButton.Visible   = $true
 
-	$createUserButton.Add_Click({createNewUser $roleType.Items[$roleType.SelectedIndex] $firstTextBox.Text $lastTextBox.Text})
+	# Compile and display the form
+	$form.controls.AddRange(@($roleTypeLabel,$roleType,$createUserButton,$firstNameLabel,$firstTextBox,$lastNameLabel,$lastTextBox,$exitButton))
+
+	$createUserButton.Add_Click({ 	createNewUser $roleType.Items[$roleType.SelectedIndex] $firstTextBox.Text $lastTextBox.Text})
+
+	$exitButton.Add_Click({	syncExit
+						$form.close() })
 
 	[void]$form.ShowDialog()
 }
@@ -103,7 +121,6 @@ function createNewUser{
 
 		# concatenate the name, create a succesful creation flag which will be set to true if a user gets created
 		$fullname = "$firstname $lastname"
-		$accountcreated = "false"
 
 		# increments SAM, name will be set when $nameExists is found to be null
 		$SAMincrementer = 0
@@ -155,7 +172,7 @@ function createNewUser{
 			}
 			# CNA's aren't given login access, only emails, so set password to never expire
 			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "IPU CNA")
 		{
@@ -170,7 +187,7 @@ function createNewUser{
 			}
 			# CNA's aren't given login access, only emails, so set password to never expire
 			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "IPU RN")
 		{
@@ -185,7 +202,7 @@ function createNewUser{
 			}
 			# IPU RN's aren't given login access, only emails, so set password to never expire
 			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "RN")
 		{
@@ -198,7 +215,7 @@ function createNewUser{
 			{
 				Add-ADGroupMember -Identity $rn -Members $sam
 			}
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "NP")
 		{
@@ -211,7 +228,7 @@ function createNewUser{
 			{
 				Add-ADGroupMember -Identity $np -Members $sam
 			}
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "LPN")
 		{
@@ -224,7 +241,7 @@ function createNewUser{
 			{
 				Add-ADGroupMember -Identity $lpn -Members $sam
 			}
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}	
 		elseif ($role -eq "Chaplain")
 		{
@@ -237,7 +254,7 @@ function createNewUser{
 			{
 				Add-ADGroupMember -Identity $chap -Members $sam
 			}
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "Social Worker")
 		{
@@ -250,7 +267,7 @@ function createNewUser{
 			{
 				Add-ADGroupMember -Identity $sw -Members $sam
 			}
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 		else
 		{
@@ -260,11 +277,11 @@ function createNewUser{
 			# add to AD, enable account, then mark account as created
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description $role -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
-			$accountcreated = "true"
+			$global:accountCreated = "true"
 		}
 
 		# if the account was created, set the groups that everyone gets
-		if ($accountcreated)
+		if ($global:accountCreated -eq "true")
 		{
 			# everyonegroups.txt : just a list of groups everyone goes in, each group on a new line
 			$egs = Get-Content -Path '.\debloat files\everyonegroups.txt'
@@ -280,17 +297,12 @@ function createNewUser{
 			$groupsmess = $groups -replace ' @{name=', ''
 			$groups = $groupsmess -replace '}', ','
 
-			# top secret, or just some razzle dazzle. It's up to you to decide!
-			if (Test-Path "\script\psexec.exe")
-			{
-				# psexec.txt : a simple command that forces an Exchange 365 sync with on-site AD. Not required but is faster
-				$psexe = Get-Content -Path '.\debloat files\psexec.txt' 
-				Start-Process -FilePath PSExec -ArgumentList $psexe
-			}
-			else 
-			{
-				[System.Windows.Forms.MessageBox]::Show("PSEXEC not found, password sync may take up to 30 minutes" , "Warning")
-			}
+			$global:$addedUsers = [PSCustomObject]@{	firstname = $firstname
+												lastname  = $lastname
+												role      = $role
+												upn       = $upn	}
+
+			$($user.firstname),,$($user.lastname),$($user.upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$(word)`n)"
 
 			# inform that user was created successfully
 			if ($SAMincrementer -le 1)
@@ -317,6 +329,84 @@ function createNewUser{
 	$form2.BackColor  = '#000000'
 	$form2.ForeColor  = '#ffffff'
 	$form2.text       = 'Creating new user'
+}
+
+# takes an array of objects and dumps them into a CSV file on the users desktop
+function createQliqImport
+{
+	# setup the path and file names to be formatted
+	$path = "c:\users\$($env:username)\desktop"
+	$file = "$($path)\qliqImport.csv"
+
+	Add-Content $file ("First Name,Mid Name,Last Name,Email/Mobile,Title,Department,Full Group Access, Mobile App Login, Broadcasting, Group Messaging, Group1, Group2,Group3,Password `n")
+
+	foreach ($user in $addedUsers)
+	{
+		# for readability and more compact code, assign special var
+		$role = $user.role
+		if ($role -eq "IPU CNA") 
+		{
+			$word = Get-Content ".\debloat files\qliqcna.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$(word)`n)"
+		}
+		elseif ($role -eq "IPU RN")
+		{
+			$word = Get-Content ".\debloat files\qliqrn.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,IPU All Staff,Emergency Group,,$(word)`n)"
+		}
+		elseif ($role -eq "CNA")
+		{
+			$word = Get-Content ".\debloat files\qliqcna.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,CNAs (Field Only),$(word)`n)"
+		}
+		elseif (($role -eq "RN") -or ($role -eq "LPN"))
+		{
+			$word = Get-Content ".\debloat files\qliqrn.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Nurses (Field Only),$(word)`n)"
+		}
+		elseif ($role -eq "NP")
+		{
+			$word = Get-Content ".\debloat files\qliqrn.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,NPs (HC only),$(word)`n)"
+		}
+		elseif ($role -eq "Social Worker")
+		{
+			$word = Get-Content ".\debloat files\qliqsw.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$(word)`n)"
+		}
+		elseif ($role -eq "Chaplain")
+		{
+			$word = Get-Content ".\debloat files\qliqsw.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$(word)`n)"
+		}
+		else
+		{
+			$word = Get-Content ".\debloat files\qliqad.txt"
+			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,,$(word)`n)"
+		}
+}
+
+# once all new accounts are added, this will sync AD,export a Qliq CSV, and exit
+function syncExit 
+{
+	if (Test-Path "\script\psexec.exe")
+	{
+		Write-Output "psexe  $(Get-Date) " >> ".\atemplog.txt"
+		# psexec.txt : a simple command that forces an Exchange 365 sync with on-site AD. Not required but is faster
+		$psexe = Get-Content -Path '.\debloat files\psexec.txt' 
+		Start-Process -FilePath PSExec -ArgumentList $psexe
+	}
+	else 
+	{
+		Write-Output "no psexe  $(Get-Date) " >> ".\atemplog.txt"
+		[System.Windows.Forms.MessageBox]::Show("PSEXEC not found, password sync may take up to 30 minutes" , "Warning")
+	}
+
+	# delete old Qliq import CSV and create new one
+	$path = "c:\users\$($env:username)\desktop"
+	$file = "$($path)\qliqImport.csv"
+	Remove-Item -Path $file -Force
+	createQliqImport
 }
 
 
