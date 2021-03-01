@@ -1,0 +1,65 @@
+# created by Alan Bishop
+# last updated 3/1/2021
+#
+# Shows a list of users and the last time they checked their email
+
+
+# pull userlist from AD, setup array of objects, and set some excluded users
+$users = Get-AdUser -filter {(EmailAddress -like "*@*") -and (enabled -Eq 'True')} -properties * | select DisplayName, EmailAddress
+$finalusers = @()
+
+# excludedfromemail.txt : a list of SAM's, each on a new line
+$users         = Get-Content -Path '.\debloat files\excludedfromemail.txt'
+# email.txt : email domain in the format  @domain.com
+$domain        = Get-Content -Path '.\debloat files\email.txt'
+# create a list of email addresses that are excluded from this list
+$excludedUsers = @()
+foreach ($user in $users)
+{
+	$excludedUsers += $user+$domain
+}
+
+
+Write-Host "this can take several minutes, be patient"
+
+# if there is no connection to Office 365, then create
+if($null -eq (get-pssession | where-object {$_.ComputerName -EQ 'outlook.office365.com'}))
+{
+	.\exchangeconnect.ps1 | Out-Null
+	$connected = $true
+}
+# else set flag that connection wasnt established (so this script doesnt disconnect pre-existing)
+else
+{
+	$connected = $false
+}
+
+
+foreach ($user in $users)
+{
+	if (!($excludedUsers -contains $user.EmailAddress))
+	{
+		$finaluser = (Get-MailboxStatistics -identity $user.EmailAddress | select DisplayName, LastUserActiontime)
+		$finalusers += New-Object -TypeName PSObject -Property @{	DisplayName = $finaluser.DisplayName;
+																	LastUserActionTime = $finaluser.LastUserActionTime;}	
+		Write-Host -NoNewline "."															
+	}
+}
+
+Write-Host " "
+
+# sort the array and display it
+$finalusers | Sort-Object -Property LastUserActionTime -Descending
+
+
+# if this script connected to Exchange, then disconnect
+if ($connected)
+{
+	.\exchangedisconnect.ps1
+}
+# else leave connections how they were
+else 
+{
+	echo " "
+	echo "pre-existing connection detected, not disconnecting"
+}
