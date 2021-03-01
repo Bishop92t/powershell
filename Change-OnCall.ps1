@@ -1,5 +1,5 @@
 # created by Alan Bishop
-# last updated 8/3/2020
+# last updated 2/28/2021
 #
 # Each week a new person takes after hours calls, and they need to be sent eFax emails. New person gets
 # added and last weeks person gets removed. Some users get the emails all the time so they are excluded.
@@ -8,6 +8,10 @@
 # This script is intended to be auto-run weekly as a scheduled task
 # It relies on exchangeconnect.ps1, exchangedisconnect.ps1, faxadd.ps1 and faxremove.ps1 to be in c:\script
 
+
+# start a detailed log file of this script for troubleshooting, beginning with userlist before, verbose log, then userlist after
+$verboseLog = "c:\logs\verbose-change-oncall.txt"
+Start-Transcript -path $verboseLog -Append
 
 
 # these have full time fax emails anyway, don't process
@@ -20,7 +24,7 @@ $inFile    = "c:\script\debloat files\oncallschedule.txt"
 $inStream  = New-Object System.IO.StreamReader ($inFile)
 $outFile   = "c:\script\debloat files\temp.txt"
 $outStream = New-Object System.IO.StreamWriter ($outFile)
-$logFile   = "d:\logs\changeoncall.txt"
+$logFile   = "c:\logs\change-oncall.txt"
 
 # initialize the array list that holds the output stream
 [System.Collections.ArrayList]$outArrayList = @("")  
@@ -32,6 +36,9 @@ if($null -eq (get-pssession | where-object {$_.ComputerName -EQ 'outlook.office3
 	c:\script\exchangeconnect.ps1 | Out-Null
 	$connected = $true
 }
+
+# once connected to Office365, pull the user list before this script runs
+$userListBefore = .\faxadd.ps1
 
 
 #####################################################################
@@ -75,11 +82,18 @@ if ($userOnCall -eq $null)
 	$alertEmail = "nbishop"+(Get-Content "c:\script\debloat files\email.txt")
 	c:\script\Send-Email.ps1 $alertEmail "Change-OnCall.ps1 alert" "Ran out of valid emails, check oncallschedule.txt"
 }
+# if the user isn't on the exclusion list then add them to list and notify them
 elseif (-not ($excludedUsers -match $userOnCall))
 {
 	& c:\script\faxadd.ps1 $userOnCall
 	Add-Content $logFile ("Added $userOnCall")
+	# email.txt : the email domain in the format  @$company.com
+	$emailAddress = $userOnCall+(Get-Content "c:\script\debloat files\email.txt")
+	$subject = "You've been added to manager on call eFax"
+	$message = "You've been added to the manager on call eFax. If you are not manager on call this week please notify Alan so he can remove you. This is an automated email."
+	& ".\Send-Email.ps1" $emailAddress $subject $message
 }
+# else the user already has fulltime access, so do nothing
 else
 {
 	Add-Content $logFile ("$userOnCall already has full time access")
@@ -98,6 +112,9 @@ foreach ($line in $outArrayList)
 $outStream.Close()
 $outStream.Dispose()
 
+# for the verbose log, pull userlist before we close the connection
+$userListAfter = .\faxadd.ps1
+
 # if this script connected to Exchange, than disconnect
 if ($connected)
 {
@@ -108,3 +125,9 @@ if ($connected)
 Remove-Item $inFile -Force
 Rename-Item $outFile $inFile
 Add-Content $logFile ("Completed "+(Get-Date -Format "MM-dd-yyyy")+" `n ")
+
+# finish off the verbose log
+Stop-Transcript | Out-Null
+
+Add-Content $verboseLog ("User list before `n $($userListBefore)")
+Add-Content $verboseLog ("User list after `n $($userListAfter)")
