@@ -1,0 +1,56 @@
+# created by Alan Bishop 
+# updated 3/1/2021
+#
+# Determines if a machine needs BitLocker (laptops), if so enable BitLocker and save the key on shared drive
+# Intended to be run from another script as part of new PC setup, but can be run separate
+
+
+# determines where the script is being run from, some pc's seem to struggle with this (PS ver issue?)
+$drives = Get-WmiObject Win32_Volume -Filter "DriveType='2'" | select -expand driveletter
+$computerName = $env:computername
+foreach ($drive in $drives)
+{   
+    if (test-path "$($drive)\Debloat-Windows.bat")
+    {
+        $installdrive = $drive
+    }
+}
+
+# if the device is a laptop, enable bitlocker
+if (($computerName -match "surface") -or ($computerName -match "latitude") -or ($computerName -match "probook") -or ($computerName -match "asus") -or ($computerName -match "laptop") -or ($computerName -match "dell"))
+{
+    # setup pre-req's -> does pc have TPM chip and is there a Bitlock drive that's ready
+    $TPM = Get-WmiObject win32_tpm -Namespace root\cimv2\security\microsofttpm | where {$_.IsEnabled().Isenabled -eq 'True'} -ErrorAction SilentlyContinue
+    $bitLockerReadyDrive = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction SilentlyContinue
+
+    # if the pre-req's are met, then enable BitLocker and save recovery key
+    if ($TPM -and $bitLockerReadyDrive) 
+    {
+        # setup the location to save the BitLocker key to
+        # network.txt : network share path, ex: \\server\folder\
+        $keyPath = Get-Content -Path "$($installdrive)\debloat files\network.txt"
+        $keyPath = "$($keyPath)IT Coordinator\bitlocker keys\"
+        if (-not (Test-Path $keyPath))
+        {
+            New-Item -Path $keyPath -Name $computerName -ItemType "directory"
+        }
+
+        # verify we have a valid place to save the key before proceeding
+        if (Test-Path $keyPath)
+        {
+            # enable BitLocker, saving the key to network drive
+            $bitLockerReadyDrive | Enable-BitLocker -EncryptionMethod Aes128 -RecoveryKeyPath "$($keyPath)$($computerName)" -TPMProtector
+        }
+        else 
+        {
+            "no valid save location, is pc domain joined and on wifi?"
+        }
+    }
+    else
+    {
+        "machine has no valid drives or no valid TPM chip"
+        "1. Try a reboot"
+        "2. In command prompt/powershell:  reagentc /enable"
+        "3. More tips found in alan\bitlocker - unable to enable.txt"
+    }
+}    
