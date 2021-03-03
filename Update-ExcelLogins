@@ -1,0 +1,81 @@
+# created by Alan Bishop
+# last modified 3/3/2021
+#
+# Pulls AD user name, email and date of last password change -> dumps into an Excel file
+#
+# Intended to run as a scheduled task, auto updates LWL excel file, the All Logins tab
+
+	
+##################################
+# items to be updated over time: #
+##################################
+
+# list of users or service accounts to be excluded
+$excludedUsers = Get-Content -Path '.\debloat files\excludedlogins.txt'	
+
+# currently passwords change every 6 months
+$numDaysBetweenResets = 180
+
+#########################################
+# end of items to be updated over time: #
+#########################################
+
+# setup the excel variables
+$path      = (Get-Content -Path '.\debloat files\networki.txt')+"Computer and Phone Inventory\"
+$file      = Get-ChildItem -Path $path -Filter "*Laptops, Workstations, Logins.xlsx"
+$myst      = Get-Content -Path '.\debloat files\excel.txt'
+$excel     = New-Object -ComObject Excel.Application
+$workbook  = $excel.Workbooks.Open($path+$file,0,0,5,$myst)
+$worksheet = $workbook.worksheets.Item(3)
+
+# keep excel from sending text to the console
+$excel.Visible       = $false
+$excel.Interactive   = $false
+$excel.UserControl   = $false
+$excel.DisplayAlerts = $false
+
+# declare the log file
+$logFile = "c:\logs\excel-updatelogins.txt"
+
+# grab all active users and sort by their name
+$users = Get-ADUser -Filter {enabled -Eq 'True'} -Properties * | select DisplayName, SamAccountName, EmailAddress, PasswordLastSet, PasswordNeverExpires | Sort-Object -property DisplayName
+
+# row to start adding data to
+$startRow = 4
+
+foreach ($user in $users)
+{
+	# if the user is not on the exclusion list
+	if (-not ($excludedUsers -contains $user.DisplayName))
+	{	
+		# calculate how many days since the password was last changed
+		if ($user.PasswordNeverExpires -eq $false)
+		{
+			$expires = ($user.PasswordLastSet).AddDays($numDaysBetweenResets)
+		}
+		else
+		{
+			$expires = "never expires"
+		}
+		$worksheet.Cells($startRow, 1).Value() = $user.DisplayName
+		$worksheet.Cells($startRow, 2).Value() = $user.SamAccountName
+		$worksheet.Cells($startRow, 3).Value() = $user.EmailAddress
+		$worksheet.Cells($startRow, 4).Value() = $expires
+		$startRow ++
+	}
+}
+
+# save and close the excel file
+[void]$workbook.Save()
+[void]$workbook.Close()
+[void]$excel.Quit()
+
+# attempt garbage collection to ensure Excel closes
+[void][System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet)
+[void][System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook)
+[void][System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel)
+[GC]::Collect()
+
+# write the end of the log file with date
+$startRow = $startRow - 4
+Add-Content $logFile ("Completed $startRow rows on "+(Get-Date -Format "MM-dd-yyyy")+" `n ")
