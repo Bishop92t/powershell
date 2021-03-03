@@ -1,0 +1,175 @@
+# created by Alan Bishop
+# last modified 3/3/2021
+#
+# Syncs a set of data from PW sheet and uses that to update Laptops,Workstations,Logins excel file
+
+
+##################################
+# items to be updated over time: #
+##################################
+
+# maximum potential users, overestimating is ok, underestimating is bad
+# this is janky but in the future the sheet likely will not support this system anyway
+$max = 300
+
+# list of names to ignore (in the LWL file), this makes the log file much more readable when a name isn't found
+$ignoreList = Get-Content -Path 'c:\script\debloat files\excelpwexclude.txt'
+
+#########################################
+# end of items to be updated over time: #
+#########################################
+
+# declare the log file
+$logFile = "c:\logs\sync-excelpw.txt"
+
+# setup variables relating to file system and the array of objects
+$path  = (Get-Content -Path 'c:\script\debloat files\networki.txt')+'Alan - working on\'
+$file  = Get-ChildItem -Path $path -Filter '*R Computer P*.xlsx'
+$myst  = Get-Content -Path 'c:\script\debloat files\excel.txt'
+$users = @()
+
+# setup the excel variables
+$excel = New-Object -ComObject Excel.Application
+$workbook = $excel.Workbooks.Open($path+$file,0,0,5,$myst)
+$worksheet = $workbook.worksheets.Item(1)
+
+# load up all the user data into an array of objects, from PW sheet, starting at row 4
+for ($i = 4; $i -le $max; $i++)
+{
+	# setup temp value from worksheet
+	$userTemp = $worksheet.Cells.Item($i, 1).Value()
+
+	# if we find the hidden stop value, stop processing
+	if ($userTemp -eq "stop")
+	{
+		Add-Content $logFile "stopping load-in at $i - if this is near $max the script needs to be adjusted (rare)"
+		$i = $max
+	}
+	elseif (($ignoreList -eq $userTemp) -or ($userTemp -eq "") -or ($i -eq 9) -or ($i -eq 10) -or ($i -eq 11))
+	{
+		# don't process excluded names, blanks, or lines 9 through 11
+	}
+	# else add the users name and data to each row
+	else
+	{
+		# some users data isn't stored, so don't bother with those		
+		if ($worksheet.Cells.Item($i,2).Value() -ne "NULL")
+		{
+			$users += New-Object -TypeName PSObject -Property @{name = $worksheet.Cells.Item($i,1).Value(); 
+																pass = $worksheet.Cells.Item($i,2).Value(); 
+																ns   = $worksheet.Cells.Item($i,7).Value();}
+		}
+	}
+}
+
+# now that user name and data are loaded into memory we can close that excel file
+[void]$workbook.Close()
+[void]$excel.Quit()
+
+
+################################################################################################
+
+
+# setup the excel variables for the next file
+$path      = (Get-Content -Path '.\debloat files\networki.txt')+"Computer and Phone Inventory\"
+$file      = Get-ChildItem -Path $path -Filter "*Laptops, Workstations, Logins.xlsx"
+$excel     = New-Object -ComObject Excel.Application
+$workbook  = $excel.Workbooks.Open($path+$file,0,0,5,$myst)
+$worksheet = $workbook.worksheets.Item(1)
+
+# make a backup of the Laptops/etc file just in case, dating it so archives of past files are kept (another script will clean out old files)
+$tempFile = ((Get-Content -Path '.\debloat files\networki.txt')+"Alan - working on\old\")+"TWL "+(Get-Date -Format "MM-dd-yyyy")+".xlsx"
+copy ($path+$file) $tempFile
+
+# keep excel from sending text to the console
+$excel.Visible       = $false
+$excel.Interactive   = $false
+$excel.UserControl   = $false
+$excel.DisplayAlerts = $false
+
+# starting at row 7 in LWL
+for ($i = 7; $i -le $max; $i++)
+{
+	# store which user we'll be searching for data
+	$userToFind = $worksheet.Cells.Item($i,3).Value()
+
+	# if we reach the end cell, break the loop
+	# if we find the stop value ("User"), stop processing
+	if ($userToFind -eq "User")
+	{
+		Add-Content $logFile "stopping write to file at $i - if this is near $max the script needs to be adjusted (rare)"
+		break
+	}
+
+	$isUserExcluded = $false
+	foreach ($ignore in $ignoreList)
+	{
+		# if name is null or user is found in ignore list, skip this user
+		if (($ignore -eq $null) -or ($userToFind -match $ignore))
+		{
+			$isUserExcluded = $true
+		}
+	}
+
+	# if user is not excluded, process them
+	if ($isUserExcluded -eq $false)
+	{
+		# attempt to find that users data in array of objects from above, special cases for IPU or Volunteers
+		if ($userToFind -match "IPU")
+		{
+			$userObject = ($users | Where-Object name -Match "ipu")
+			$userFound = $userToFind
+		}
+		elseif ($userToFind -match "volunteer")
+		{
+			$userObject = ($users | Where-Object name -Match "volunteer")		
+			$userFound = $userToFind
+		}
+		else
+		{
+			$userObject = ($users | Where-Object name -eq $userToFind)
+			$userFound  = ($userObject | Select name | ForEach { $_.name })
+		}
+		
+		$dataTemp = ($userObject | Select pass | ForEach { $_.pass })
+		$nsTemp   = ($userObject | Select ns | ForEach { $_.ns })
+		
+		# if the user is found, update their data
+		if (($userFound -eq $userToFind) -and ($userToFind -ne "") -and ($userToFind -ne " "))
+		{
+			# update data if applicable, if statement is only here for logging purposes
+			if ($dataTemp -ne $worksheet.Cells($i,4).Value())
+			{
+				Add-Content $logFile "updated < $userToFind > at $i"
+				$worksheet.Cells($i,4).Value() = $dataTemp
+			}
+			# if NS field doesn't match, update
+			if (($nsTemp -ne $worksheet.Cells($i,5).Value()) -and ($nsTemp -ne $null))
+			{
+				Add-Content $logFile "updated < $userToFind > _NS_ at $i"
+				$worksheet.Cells($i,5).Value() = $nsTemp			
+			}
+
+		}
+		# else write to log file, edge cases should be handled above (see $ignoreList)
+		else
+		{
+			Add-Content $logFile "< $userToFind > not found"
+		}
+
+	}
+}
+
+# save and close the excel file
+[void]$workbook.Save()
+[void]$workbook.Close()
+[void]$excel.Quit()
+
+# attempt garbage collection to ensure Excel closes
+[void][System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet)
+[void][System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook)
+[void][System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel)
+[GC]::Collect()
+
+# write the end of the log file with date
+Add-Content $logFile ("Completed "+(Get-Date -Format "MM-dd-yyyy")+" `n ")
