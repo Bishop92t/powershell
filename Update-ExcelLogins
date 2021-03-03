@@ -35,7 +35,7 @@ $excel.UserControl   = $false
 $excel.DisplayAlerts = $false
 
 # declare the log file
-$logFile = "c:\logs\excel-updatelogins.txt"
+$logFile = "c:\logs\update-excellogins.txt"
 
 # grab all active users and sort by their name
 $users = Get-ADUser -Filter {enabled -Eq 'True'} -Properties * | select DisplayName, SamAccountName, EmailAddress, PasswordLastSet, PasswordNeverExpires | Sort-Object -property DisplayName
