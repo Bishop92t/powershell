@@ -309,7 +309,7 @@ function createNewUser{
 			Add-Content $global:tempFile $role
 			Add-Content $global:tempFile $upn
 
-			# $($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)`n"
+			# $($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)"
 
 			# inform that user was created successfully
 			if ($SAMincrementer -le 1)
@@ -359,42 +359,42 @@ function createQliqImport
 		if ($role -eq "IPU CNA") 
 		{
 			$word = Get-Content ".\debloat files\qliqcna.txt"
-			$addL = "$($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)`n"
+			$addL = "$($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)"
 		}
 		elseif ($role -eq "IPU RN")
 		{
 			$word = Get-Content ".\debloat files\qliqrn.txt"
-			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)`n"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)"
 		}
 		elseif ($role -eq "CNA")
 		{
 			$word = Get-Content ".\debloat files\qliqcna.txt"
-			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,CNAs (Field Only),$($word)`n"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,CNAs (Field Only),$($word)"
 		}
 		elseif (($role -eq "RN") -or ($role -eq "LPN"))
 		{
 			$word = Get-Content ".\debloat files\qliqrn.txt"
-			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Nurses (Field Only),$($word)`n"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Nurses (Field Only),$($word)"
 		}
 		elseif ($role -eq "NP")
 		{
 			$word = Get-Content ".\debloat files\qliqrn.txt"
-			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,NPs (HC only),$($word)`n"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,NPs (HC only),$($word)"
 		}
 		elseif ($role -eq "Social Worker")
 		{
 			$word = Get-Content ".\debloat files\qliqsw.txt"
-			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)`n"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)"
 		}
 		elseif ($role -eq "Chaplain")
 		{
 			$word = Get-Content ".\debloat files\qliqsw.txt"
-			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)`n"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)"
 		}
 		else
 		{
 			$word = Get-Content ".\debloat files\qliqad.txt"
-			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,,$($word)`n"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,,$($word)"
 		}
 		Add-Content $file $addL
 	}
