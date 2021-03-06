@@ -1,12 +1,18 @@
 # created by Alan Bishop
-# last updated 2/14/2021
+# last updated 3/6/2021
 #
 # Launches a GUI that creates a user in AD / Exchange 365 and assigns them to the proper groups
 
 
 # global variable, flagged true if an account was created
 $accountCreated = "false"
-$addedUsers = New-Object -TypeName psobject
+
+# file for storing all the users added this session, delete if already exists
+$tempFile = "c:\logs\temp.txt"
+if (Test-Path $tempfile)
+{
+	Remove-Item $tempFile
+}
 
 # this function that creates the GUI
 Function generateForm {
@@ -297,12 +303,13 @@ function createNewUser{
 			$groupsmess = $groups -replace ' @{name=', ''
 			$groups = $groupsmess -replace '}', ','
 
-			$global:$addedUsers = [PSCustomObject]@{	firstname = $firstname
-												lastname  = $lastname
-												role      = $role
-												upn       = $upn	}
+			# add the created user's info to a temp holding file
+			Add-Content $global:tempFile $firstname
+			Add-Content $global:tempFile $lastname
+			Add-Content $global:tempFile $role
+			Add-Content $global:tempFile $upn
 
-			$($user.firstname),,$($user.lastname),$($user.upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$(word)`n)"
+			# $($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)`n"
 
 			# inform that user was created successfully
 			if ($SAMincrementer -le 1)
@@ -338,52 +345,60 @@ function createQliqImport
 	$path = "c:\users\$($env:username)\desktop"
 	$file = "$($path)\qliqImport.csv"
 
-	Add-Content $file ("First Name,Mid Name,Last Name,Email/Mobile,Title,Department,Full Group Access, Mobile App Login, Broadcasting, Group Messaging, Group1, Group2,Group3,Password `n")
+	Add-Content $file ("First Name,Mid Name,Last Name,Email/Mobile,Title,Department,Full Group Access, Mobile App Login, Broadcasting, Group Messaging, Group1, Group2,Group3,Password")
 
-	foreach ($user in $addedUsers)
+
+	$content = Get-Content $global:tempFile
+	for ($i = 0; $i -lt $content.length; $i = $i + 4)
 	{
-		# for readability and more compact code, assign special var
-		$role = $user.role
+		$first = $content[$i]
+		$last = $content[$i+1]
+		$role = $content[$i+2]
+		$upn = $content[$i+3]
+
 		if ($role -eq "IPU CNA") 
 		{
 			$word = Get-Content ".\debloat files\qliqcna.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)`n"
 		}
 		elseif ($role -eq "IPU RN")
 		{
 			$word = Get-Content ".\debloat files\qliqrn.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,IPU All Staff,Emergency Group,,$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)`n"
 		}
 		elseif ($role -eq "CNA")
 		{
 			$word = Get-Content ".\debloat files\qliqcna.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,CNAs (Field Only),$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,CNAs (Field Only),$($word)`n"
 		}
 		elseif (($role -eq "RN") -or ($role -eq "LPN"))
 		{
 			$word = Get-Content ".\debloat files\qliqrn.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Nurses (Field Only),$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Nurses (Field Only),$($word)`n"
 		}
 		elseif ($role -eq "NP")
 		{
 			$word = Get-Content ".\debloat files\qliqrn.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,NPs (HC only),$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,NPs (HC only),$($word)`n"
 		}
 		elseif ($role -eq "Social Worker")
 		{
 			$word = Get-Content ".\debloat files\qliqsw.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)`n"
 		}
 		elseif ($role -eq "Chaplain")
 		{
 			$word = Get-Content ".\debloat files\qliqsw.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)`n"
 		}
 		else
 		{
 			$word = Get-Content ".\debloat files\qliqad.txt"
-			$addL = "$($user.firstname),,$($user.lastname),$($user.upn),($(user.role),,y,y,n,y,All Group Daily Messaging,Emergency Group,,$(word)`n)"
+			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,,$($word)`n"
 		}
+		Add-Content $file $addL
+	}
+
 }
 
 # once all new accounts are added, this will sync AD,export a Qliq CSV, and exit
