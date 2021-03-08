@@ -1,5 +1,5 @@
 # created by Alan Bishop
-# last updated 3/6/2021
+# last updated 3/8/2021
 #
 # Launches a GUI that creates a user in AD / Exchange 365 and assigns them to the proper groups
 
@@ -176,8 +176,6 @@ function createNewUser{
 			{
 				Add-ADGroupMember -Identity $cna -Members $sam
 			}
-			# CNA's aren't given login access, only emails, so set password to never expire
-			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
 			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "IPU CNA")
@@ -191,8 +189,6 @@ function createNewUser{
 			{
 				Add-ADGroupMember -Identity $ipucna -Members $sam
 			}
-			# CNA's aren't given login access, only emails, so set password to never expire
-			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
 			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "IPU RN")
@@ -207,7 +203,6 @@ function createNewUser{
 				Add-ADGroupMember -Identity $ipurn -Members $sam
 			}
 			# IPU RN's aren't given login access, only emails, so set password to never expire
-			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
 			$global:accountCreated = "true"
 		}
 		elseif ($role -eq "RN")
@@ -289,6 +284,9 @@ function createNewUser{
 		# if the account was created, set the groups that everyone gets
 		if ($global:accountCreated -eq "true")
 		{
+			# moving to a complex password, never expire system
+			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
+
 			# everyonegroups.txt : just a list of groups everyone goes in, each group on a new line
 			$egs = Get-Content -Path '.\debloat files\everyonegroups.txt'
 			foreach ($eg in $egs)
