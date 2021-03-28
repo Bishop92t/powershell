@@ -1,5 +1,5 @@
 # Alan Bishop 
-# last updated 3/6/2021
+# last updated 3/28/2021
 #
 # Asks for and stores password token encrypted on local drive under user profile. 
 # Does not check password or SAM account name for accuracy.
@@ -9,15 +9,15 @@
 # ************************************************************************************************************
 # *                       NEVER copy this token to a USB drive, laptop or onto the internet                  *
 # * NEVER use this to store domain admin credentials, create a service account with min priveleges instead!  *
-# *                        If token is lost the users password must be changed immediately                   *
+# *                       If token is exposed the users password must be changed immediately                 *
 # ************************************************************************************************************
 # ************************************************************************************************************
 #
 # usage:
 # 		.\tokenpassword.ps1 				use the GUI to create tokens
-# 		.\tokenpassword.ps1 $pass 			creates token using the password provided, then clears screen
-# 		.\tokenpassword.ps1 $user $pass 		creates a token for $user based on the password provided, then clears the screen.
-# 								note that $user must be the users SAM name (eg John Smith's SAM would be jsmith)
+# 		.\tokenpassword.ps1 $pass 			creates token using the pass provided, then clears screen
+# 		.\tokenpassword.ps1 $user $pass 		creates a token for $user based on the pass provided, then clears the screen.
+# 											note that $user must be the users SAM name (eg John Smith's SAM would be jsmith)
 
 
 Function createToken {
@@ -48,6 +48,7 @@ Function generateForm {
 
 	# setup the SAM text box
 	$SAMTextBox          = New-Object System.Windows.Forms.TextBox
+	$SAMTextBox.Text     = $env:username
 	$SAMTextBox.Size     = New-Object System.Drawing.Size(260,20)
 	$SAMTextBox.Location = New-Object System.Drawing.Point(20,90)
 	$form.Controls.Add($SAMTextBox)
@@ -92,12 +93,12 @@ if ($args.count -eq 0)
 {
 	generateForm
 }
-# if an argument is passed, use as password using the currently logged in SAM
-elseif ($args.count -eq 1) 
+# if only 1 arg, pull current login
+elseif ($args.count -eq 1)
 {
 	createToken $env:username $args[0]
 }
-# else assume 1st field SAM, 2nd field password, ignore other fields
+# else 1st field SAM, 2nd field password, ignore other fields
 else
 {
 	createToken $args[0] $args[1]
