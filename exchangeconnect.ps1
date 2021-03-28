@@ -1,5 +1,5 @@
 # Alan Bishop 
-# modified 8/3/2020
+# modified 3/28/2021
 #
 # connects this session to Exchange Online, intended to be a helper script but can be run solo
 #
@@ -10,14 +10,16 @@
 # new version requires:
 #	   install-module -name exchangeonlinemanagement
 
+# the token we'll be working with, based on current logged in user
+$token = "$($env:userprofile)\$($env:username).enc"
 
 # if the token is saved
-if(test-path $env:userprofile\token.enc)
+if(test-path $token)
 {
 	# load user credentials
 	$name = Get-Content -Path '.\debloat files\email.txt'
 	$name = $env:username+$name
-	$pass = Get-Content $env:userprofile\token.enc | ConvertTo-SecureString
+	$pass = Get-Content $token | ConvertTo-SecureString
 	$cred = new-object -typename System.Management.Automation.PSCredential -argumentlist $name, $pass
 
 	# connect to Exchange Online and Azure AD
@@ -31,11 +33,12 @@ if(test-path $env:userprofile\token.enc)
 	# import that into current PS session, waiting for it to finish before proceeding
 	# Import-PSSession $Session -DisableNameChecking | Out-Null
 }
-# if token not saved, inform the user
+# if token not saved, prompt to create one
 else
 {
-	echo "first you need to run ./tokenpassword.ps1  "
-	echo "to store your password encrypted in your user profile"
+	echo "No token found, running token creator"
+	.\tokenpassword.ps1
+	.\exchangeconnect.ps1
 }
 
 
