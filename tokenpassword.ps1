@@ -15,6 +15,7 @@
 #
 # usage:
 # 		.\tokenpassword.ps1 				use the GUI to create tokens
+# 		.\tokenpassword.ps1 gui $user 		for other scripts: run GUI with provided username (suggest using "allnew" for createnewuser script)
 # 		.\tokenpassword.ps1 $pass 			creates token using the pass provided, then clears screen
 # 		.\tokenpassword.ps1 $user $pass 		creates a token for $user based on the pass provided, then clears the screen.
 # 											note that $user must be the users SAM name (eg John Smith's SAM would be jsmith)
@@ -24,13 +25,23 @@ Function createToken {
 	param (	[Parameter(Mandatory=$true, Position=0)] [string] $SAM, 
 			[Parameter(Mandatory=$true, Position=1)] [string] $tokenP )
 
-
-	$tokenfile = "$($SAM).enc"
-	ConvertTo-SecureString -string $tokenP -asplaintext -force | ConvertFrom-SecureString | out-file $env:userprofile\$tokenfile
+	# don't create a token if user is admin anything
+	if ($SAM -like "*admin*")
+	{
+		[System.Windows.Forms.MessageBox]::Show("Do not create tokens for any admin accounts! " , "not safe!")
+		exit
+	}
+	else
+	{
+		$tokenfile = "$($SAM).enc"
+		ConvertTo-SecureString -string $tokenP -asplaintext -force | ConvertFrom-SecureString | out-file $env:userprofile\$tokenfile
+	}
 }
 
 # this function that creates the GUI
 Function generateForm {
+	param ( [Parameter(Mandatory=$true, Position=0)] [string] $SAMname )
+
 	Add-Type -AssemblyName System.Windows.Forms
 	Add-Type -AssemblyName System.Drawing
 	$form = New-Object system.Windows.Forms.Form
@@ -48,7 +59,7 @@ Function generateForm {
 
 	# setup the SAM text box
 	$SAMTextBox          = New-Object System.Windows.Forms.TextBox
-	$SAMTextBox.Text     = $env:username
+	$SAMTextBox.Text     = $SAMname
 	$SAMTextBox.Size     = New-Object System.Drawing.Size(260,20)
 	$SAMTextBox.Location = New-Object System.Drawing.Point(20,90)
 	$form.Controls.Add($SAMTextBox)
@@ -88,22 +99,31 @@ Function generateForm {
 	[void]$form.ShowDialog()
 }
 
-# launch GUI if no args are passed
-if ($args.count -eq 0)
-{
-	generateForm
-}
+
 # if only 1 arg, pull current login
-elseif ($args.count -eq 1)
+if ($args.count -eq 1)
 {
 	createToken $env:username $args[0]
 }
-# else 1st field SAM, 2nd field password, ignore other fields
+elseif ($args.count -eq 2)
+{
+	# if gui, then inject a different username
+	if ($args[0] -eq "gui")
+	{
+		generateForm $args[1]
+	}
+	# else 1st field SAM, 2nd field password, ignore other fields
+	else
+	{
+		createToken $args[0] $args[1]
+	}
+}
+# launch GUI otherwise
 else
 {
-	createToken $args[0] $args[1]
+	generateForm $env:username
 }
 
-# clear screen in 
+# clear screen 
 cls
 echo "token file saved: $tokenfile"
