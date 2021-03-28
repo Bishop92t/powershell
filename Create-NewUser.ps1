@@ -118,6 +118,12 @@ function createNewUser{
 		copy "$($path)Alan - working on\script\allnew.enc" $env:userprofile\allnew.enc 
 	}
 
+	# if the token still isn't found run a script that will ask for it
+	if (-not (Test-Path $env:userprofile\allnew.enc))
+	{
+		.\tokenpassword.ps1 gui allnew
+	}
+
 	# start creating the user if the new user token has been set
 	if (Test-Path $env:userprofile\allnew.enc)
 	{
