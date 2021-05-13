@@ -1,5 +1,5 @@
 # Alan Bishop 
-# last updated 3/28/2021
+# last updated 5/13/2021
 #
 # Asks for and stores password token encrypted on local drive under user profile. 
 # Does not check password or SAM account name for accuracy.
@@ -23,7 +23,7 @@
 
 Function createToken {
 	param (	[Parameter(Mandatory=$true, Position=0)] [string] $SAM, 
-			[Parameter(Mandatory=$true, Position=1)] [string] $tokenP )
+		[Parameter(Mandatory=$true, Position=1)] [string] $tokenP )
 
 	# don't create a token if user is admin anything
 	if ($SAM -like "*admin*")
@@ -40,7 +40,8 @@ Function createToken {
 
 # this function that creates the GUI
 Function generateForm {
-	param ( [Parameter(Mandatory=$true, Position=0)] [string] $SAMname )
+	param ( 	[Parameter(Mandatory=$true, Position=0)] [string] $SAMname, 
+			[Parameter(Mandatory=$false, Position=1)] [string] $comment )
 
 	Add-Type -AssemblyName System.Windows.Forms
 	Add-Type -AssemblyName System.Drawing
@@ -53,7 +54,14 @@ Function generateForm {
 
 	# setup the label that describes the first name text box purpose
 	$SAM          = New-Object system.Windows.Forms.Label
-	$SAM.text     = "Users login name ex: abishop (use 'allnew' for Create-NewUser script)"
+	if ($comment -eq $null)
+	{
+		$SAM.text = "Users login name ex: abishop"
+	}
+	else
+	{
+		$SAM.text = $comment
+	}
 	$SAM.AutoSize = $true
 	$SAM.location = New-Object System.Drawing.Point(10,70)
 
@@ -105,18 +113,24 @@ if ($args.count -eq 1)
 {
 	createToken $env:username $args[0]
 }
+# if arg0 is GUI  arg1 = SAM and launch GUI, else arg0 = SAM arg1=pass
 elseif ($args.count -eq 2)
 {
 	# if gui, then inject a different username
 	if ($args[0] -eq "gui")
 	{
-		generateForm $args[1]
+		generateForm $args[1] 
 	}
 	# else 1st field SAM, 2nd field password, ignore other fields
 	else
 	{
 		createToken $args[0] $args[1]
 	}
+}
+# if 3 args, arg1 = SAM  arg2 = comment to display
+elseif ($args.count -eq 3)
+{
+	generateForm $args[1] $args[2]
 }
 # launch GUI otherwise
 else
@@ -127,3 +141,4 @@ else
 # clear screen 
 cls
 echo "token file saved: $tokenfile"
+
