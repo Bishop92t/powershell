@@ -1,5 +1,5 @@
 # Alan Bishop 
-# modified 3/28/2021
+# modified 5/13/2021
 #
 # connects this session to Exchange Online, intended to be a helper script but can be run solo
 #
@@ -36,8 +36,15 @@ if(test-path $token)
 # if token not saved, prompt to create one
 else
 {
-	echo "No token found, running token creator"
-	.\tokenpassword.ps1
+	# handling a special case
+	$userSwap = Get-Content ".\debloat files\exchangeswap.txt"
+	if ($env:username -eq $userSwap[0])
+	{
+		$username = $userSwap[1]
+	}
+
+	# create a token then try to run this script again
+	.\tokenpassword.ps1 "gui" $env:username "Verify username is an administrator account for connecting to email server"
 	.\exchangeconnect.ps1
 }
 
