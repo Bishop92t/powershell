@@ -1,24 +1,32 @@
 # created by Alan Bishop
-# last modified 3/1/2021
+# last modified 5/14/2021
 #
-# simple script to show a list of groups (excluding service and unused groups)
-#
-# usage: 
-# 	.\List-Groups.ps1  				    list all group names minus some excluded service account groups (can get out of date)
-# 	.\List-Groups.ps1 details 		list all groups with 1+ users (can show service account groups)
-# 	.\List-Groups.ps1 all			    list all groups 
-# 	.\List-Groups.ps1 user $name 	list all groups $name is in ($name is the users SAM name e.g. John Doe would be jdoe)
-#
+# simple script to show a groups parsed in various ways
 
 
-# set the group exclusion text file
-$excludedGroups = Get-Content '.\debloat files\excludedgroups.txt'
+# display info on this script
+if ($args.count -eq 0)
+{
+	Write-Output "`n `n usage: `n"
+	Write-Output ".\List-Groups.ps1 active	list all group names minus some excluded service account groups"
+ 	Write-Output ".\List-Groups.ps1 details 	list all groups with 1+ users (can show service account groups)"
+ 	Write-Output ".\List-Groups.ps1 all		list all groups "
+ 	Write-Output ".\List-Groups.ps1 user $name 	list all groups $name is in ($name is the SAMname e.g. John Doe would be jdoe)"
+ 	Write-Output ".\List-Groups.ps1 rdp 		list all RDP computers as well as any current connections"
+}
+# else setup some common variables
+else
+{
+	# set the group exclusion text file
+	$excludedGroups = Get-Content '.\debloat files\excludedgroups.txt'
 
-# get all AD group names and categories (sorted alphabetically on name)
-$groups = (get-adgroup -Filter * | select SAMAccountName, GroupCategory | Sort-Object -Property SAMAccountName )
+	# get all AD group names and categories (sorted alphabetically on name)
+	$groups = (get-adgroup -Filter * | select SAMAccountName, GroupCategory | Sort-Object -Property SAMAccountName )
+}
+
 
 # list all groups not in the group exclusion text file
-if ($args.count -eq 0)
+if ($args[0] -eq "active")
 {
 	ForEach ($group in $groups)
 	{
@@ -31,7 +39,7 @@ if ($args.count -eq 0)
 }
 
 # list all groups with 1 or more members
-if ($args[0] -eq "details")
+elseif ($args[0] -eq "details")
 {
 	# create a new object so this gets formatted correctly when it's done pulling out empty groups
 	[System.Collections.ArrayList]$printableGroups = $groups
@@ -55,7 +63,7 @@ if ($args[0] -eq "details")
 }
 
 # list all groups
-if ($args[0] -eq "all")
+elseif ($args[0] -eq "all")
 {
 	$printableGroups = New-Object -TypeName "System.Collections.ArrayList"
 
@@ -71,7 +79,20 @@ if ($args[0] -eq "all")
 	Write-Output $printableGroups
 }
 
-if ($args[0] -eq "user")
+elseif ($args[0] -eq "user")
 {
 	Get-ADPrincipalGroupMembership $args[1] | select Name
+}
+
+elseif ($args[0] -eq "rdp")
+{
+	$computers = (Get-ADComputer -Filter * -Properties * | Where-Object {$_.MemberOf -like "*RDP enabled computers*"} | Select-Object Name).name
+	foreach ($computer in $computers)
+	{
+		if ($computer -ne "hrcoordinator2")
+		{
+			Write-Output "`n $($computer)"
+			query user /server:$computer
+		}
+	}
 }
