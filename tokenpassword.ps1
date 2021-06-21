@@ -1,5 +1,5 @@
 # Alan Bishop 
-# last updated 5/13/2021
+# last updated 6/21/2021
 #
 # Asks for and stores password token encrypted on local drive under user profile. 
 # Does not check password or SAM account name for accuracy.
@@ -18,12 +18,12 @@
 # 		.\tokenpassword.ps1 gui $user 		for other scripts: run GUI with provided username (suggest using "allnew" for createnewuser script)
 # 		.\tokenpassword.ps1 $pass 			creates token using the pass provided, then clears screen
 # 		.\tokenpassword.ps1 $user $pass 		creates a token for $user based on the pass provided, then clears the screen.
-# 											note that $user must be the users SAM name (eg John Smith's SAM would be jsmith)
+# 									note that $user must be the users SAM name (eg John Smith's SAM would be jsmith)
 
 
 Function createToken {
 	param (	[Parameter(Mandatory=$true, Position=0)] [string] $SAM, 
-		[Parameter(Mandatory=$true, Position=1)] [string] $tokenP )
+			[Parameter(Mandatory=$true, Position=1)] [string] $tokenP )
 
 	# don't create a token if user is admin anything
 	if ($SAM -like "*admin*")
@@ -54,14 +54,15 @@ Function generateForm {
 
 	# setup the label that describes the first name text box purpose
 	$SAM          = New-Object system.Windows.Forms.Label
-	if ($comment -eq $null)
+	if (($comment -eq $null) -or ($comment -eq ""))
 	{
 		$SAM.text = "Users login name ex: abishop"
 	}
 	else
-	{
+	{	
 		$SAM.text = $comment
 	}
+	
 	$SAM.AutoSize = $true
 	$SAM.location = New-Object System.Drawing.Point(10,70)
 
@@ -100,9 +101,20 @@ Function generateForm {
 	# Compile and display the form
 	$form.controls.AddRange(@($createTokenButton,$SAM,$SAMTextBox,$tokenP,$tokenPTextBox))
 
+	# if user hits enter on the password field, simulate what createToken button does
+	$tokenPTextBox.Add_KeyDown({	
+						if ($_.KeyCode -eq "Enter") 
+						{  	
+							createToken $SAMTextBox.Text $tokenPTextBox.Text  
+							$form.close()
+						}
+					})
+
 	# on button click, create token and exit
-	$createTokenButton.Add_Click({	createToken $SAMTextBox.Text $tokenPTextBox.Text  
-								$form.close()})
+	$createTokenButton.Add_Click({	
+								createToken $SAMTextBox.Text $tokenPTextBox.Text  
+								$form.close()
+							})
 
 	[void]$form.ShowDialog()
 }
@@ -138,7 +150,4 @@ else
 	generateForm $env:username
 }
 
-# clear screen 
-cls
-echo "token file saved: $tokenfile"
-
+Write-Output "token file saved: $($env:username)"
