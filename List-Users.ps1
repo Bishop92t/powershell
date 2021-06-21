@@ -1,5 +1,5 @@
 # created by Alan Bishop
-# last modified 2/3/2021
+# last modified 6/9/2021
 #
 # Various AD user account compiled info
 # usage:
@@ -23,6 +23,7 @@ if ($args.count -eq 0)
 	Write-Output '.\List-Users.ps1 forwarding      display a list of users with server-side email forwarding rules'
 	Write-Output '.\List-Users.ps1 emailrule       display a list of users with Outlook email rules (will show bad rules)'
 	Write-Output '.\List-Users.ps1 emailforward    display a list of users with Outlook email forwarding rules'
+	Write-Output '.\List-Users.ps1 azureguest	  display a list of guest users in Office365 (with creation date)'
 }
 elseif ($args[0] -eq "save")
 {
@@ -145,10 +146,6 @@ elseif ($args[0] -eq "forwarding")
 # for viewing a count of all client side (Outlook) email rules
 elseif ($args[0] -eq "emailrule")
 {
-	# to-do: drill down into rules more
-	# in the interim run this for more info:    get-inboxrule -mailbox user@domain.com | format-list
-	# Get-InboxRule -mailbox nbishop@hospicebr.org | select description
-
 	Write-Output "be patient, this one takes a while to run"
 
 	# if there is no connection to Office 365, then create
@@ -183,8 +180,10 @@ elseif ($args[0] -eq "emailrule")
 elseif ($args[0] -eq "emailforward")
 {
 	# to-do: drill down into rules more
-	# in the interim run this for more info:    get-inboxrule -mailbox user@domain.com | format-list
-	# Get-InboxRule -mailbox nbishop@hospicebr.org | select description
+	# in the interim run this for more info:    
+	# Get-InboxRule -mailbox user@domain.com | Select Description, Identity | format-list
+	# if you get an error message you can remove using identity listed below the description:
+	# Remove-InboxRule -Identity $identity
 
 	Write-Output "be patient, this one takes a while to run"
 
@@ -213,4 +212,10 @@ elseif ($args[0] -eq "emailforward")
 	{
 		.\exchangedisconnect.ps1
 	}
+}
+
+elseif ($[args[0] -eq "azureguest"])
+{
+	Connect-AzureAd
+	Get-AzureAdUser -all $true | where {$_.UserType -eq 'Guest'} | select DisplayName, RefreshTokensValidFromDateTime | Sort-Object RefreshTokensValidFromDateTime
 }
