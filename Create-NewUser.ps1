@@ -1,18 +1,45 @@
 # created by Alan Bishop
-# last updated 3/8/2021
+# last updated 6/21/2021
 #
 # Launches a GUI that creates a user in AD / Exchange 365 and assigns them to the proper groups
 
 
 # global variable, flagged true if an account was created
-$accountCreated = "false"
+$global:accountCreated = "false"
 
-# file for storing all the users added this session, delete if already exists
-$tempFile = "c:\logs\temp.txt"
-if (Test-Path $tempfile)
+# declare some global variables
+$global:gfirst = ""
+$global:glast  = ""
+$global:grole  = ""
+$global:gupn   = ""
+
+# save a log of what this script has accomplished
+if (!(Test-Path c:\logs))
 {
-	Remove-Item $tempFile
+	New-Item "c:\logs" -ItemType "directory"
 }
+Start-Transcript -path c:\logs\backup-script.txt -force -append
+
+# check if the machine has the correct module, if not install all req modules
+$checkADModule    = (Get-Module ActiveDirectory -ListAvailable).Name
+if ($checkADModule -eq $null)
+{
+	if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) 
+	{
+		if ([int](Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty BuildNumber) -ge 6000) 
+		{
+			$CommandLine = "-File `"" + $MyInvocation.MyCommand.Path + "`" " + $MyInvocation.UnboundArguments
+			Start-Process -FilePath PowerShell.exe -Verb Runas -ArgumentList $CommandLine
+			Exit
+		}
+	}
+	Write-Host "Important: Active Directory Powershell module must be installed to continue, attempting install "
+	Install-PackageProvider -Name NuGet -Force
+	$RSATname = Get-WindowsCapability -name "RSAT.ActiveDirectory*" -online | select name
+	Add-WindowsCapability -Online -name $RSATname.name
+}
+
+$netDrive = "c:\script\debloat files"
 
 # this function that creates the GUI
 Function generateForm {
@@ -31,10 +58,10 @@ Function generateForm {
 	$roleTypeLabel.location = New-Object System.Drawing.Point(10,10)
 
 	# setup the dropdown
-	$roleType          = New-Object system.Windows.Forms.ComboBox
-	$roleType.text     = ""
-	$roleType.width    = 170
-	$roleType.autosize = $true
+	$roleType          		= New-Object system.Windows.Forms.ComboBox
+	$roleType.text     		= ""
+	$roleType.width    		= 170
+	$roleType.dropdownheight = 200
 
 	# add options to the dropdown
 	@('Chaplain', 'CNA', 'IPU CNA', 'IPU RN', 'LPN', 'NP', 'RN', 'Social Worker', 'Other') | ForEach-Object {[void] $roleType.Items.Add($_)}
@@ -93,10 +120,24 @@ Function generateForm {
 	# Compile and display the form
 	$form.controls.AddRange(@($roleTypeLabel,$roleType,$createUserButton,$firstNameLabel,$firstTextBox,$lastNameLabel,$lastTextBox,$exitButton))
 
-	$createUserButton.Add_Click({ 	createNewUser $roleType.Items[$roleType.SelectedIndex] $firstTextBox.Text $lastTextBox.Text})
+	# if user hits enter, simulate what createUserButton does
+	$lastTextBox.Add_KeyDown({	
+							if ($_.KeyCode -eq "Enter") 
+							{  	
+								createNewUser $roleType.Items[$roleType.SelectedIndex] $firstTextBox.Text $lastTextBox.Text 
+							}
+						})
 
-	$exitButton.Add_Click({	syncExit
-						$form.close() })
+	# creates new user on button click
+	$createUserButton.Add_Click	({ 	
+								createNewUser $roleType.Items[$roleType.SelectedIndex] $firstTextBox.Text $lastTextBox.Text
+							})
+
+	# syncs all held data then closes this script
+	$exitButton.Add_Click	({	
+							syncExit
+							$form.close() 
+						})
 
 	[void]$form.ShowDialog()
 }
@@ -110,22 +151,24 @@ function createNewUser{
 		[Parameter(Mandatory=$true, Position=2)] [string] $lastname 
 	)
 
-	# if the token isn't found, try to pull it from network resources
+	# if the token isn't found run a script that will ask for it
 	if (-not (Test-Path $env:userprofile\allnew.enc))
 	{
-		# networki.txt : a network location, essentially  \\$server\$directory
-		$path = Get-Content '.\debloat files\networki.txt'
-		copy "$($path)Alan - working on\script\allnew.enc" $env:userprofile\allnew.enc 
-	}
-
-	# if the token still isn't found run a script that will ask for it
-	if (-not (Test-Path $env:userprofile\allnew.enc))
-	{
-		.\tokenpassword.ps1 gui allnew
+		write-output "no token found"
+		if (Test-Path c:\script\tokenpassword.ps1)
+		{
+			write-output "token found .\script"
+			c:\script\tokenpassword.ps1 gui allnew "Type the default new users password (this will be changed by user later), leave username as allnew"
+		}
+		elseif (Test-Path c:\script\PS1\tokenpassword.ps1)
+		{
+			write-output "token found .\script\ps1\"
+			c:\script\PS1\tokenpassword.ps1 gui allnew "Type the default new users password (this will be changed by user later), leave username as allnew"
+		}
 	}
 
 	# start creating the user if the new user token has been set
-	if (Test-Path $env:userprofile\allnew.enc)
+	else
 	{
 		# the temp password is saved as a token in $env:userprofile\allnew.enc
 		# you can change this password with .\tokenpassword.ps1 1 allnew $newpassword (user needs to change ASAP)
@@ -167,9 +210,15 @@ function createNewUser{
 
 		# create the UPN (email)
 		# email.txt : the email domain in the format  @$company.com
-		$upn = $sam+(Get-Content -Path '.\debloat files\email.txt')
+		$upn = $sam+(Get-Content -Path "$($netDrive)\email.txt")
 
 		$nonTemplateUser = $false
+
+		# add the created user's info to a temp holding file
+		$global:gfirst = $firstname
+		$global:glast  = $lastname
+		$global:grole  = $role
+		$global:gupn   = $upn
 
 		if ($role -eq "CNA")
 		{
@@ -177,7 +226,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "CNA" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# cna.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$cnas = Get-Content -Path '.\debloat files\cna.txt'
+			$cnas = Get-Content -Path "$($netDrive)\cna.txt"
 			foreach ($cna in $cnas)
 			{
 				Add-ADGroupMember -Identity $cna -Members $sam
@@ -190,7 +239,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "IPU CNA" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# ipucna.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$ipucnas = Get-Content -Path '.\debloat files\ipucna.txt'
+			$ipucnas = Get-Content -Path "$($netDrive)\ipucna.txt"
 			foreach ($ipucna in $ipucnas)
 			{
 				Add-ADGroupMember -Identity $ipucna -Members $sam
@@ -203,7 +252,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "IPU RN" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# ipurn.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$ipurns = Get-Content -Path '.\debloat files\ipurn.txt'
+			$ipurns = Get-Content -Path "$($netDrive)\ipurn.txt"
 			foreach ($ipurn in $ipurns)
 			{
 				Add-ADGroupMember -Identity $ipurn -Members $sam
@@ -217,7 +266,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "RN" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# rn.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$rns = Get-Content -Path '.\debloat files\rn.txt'
+			$rns = Get-Content -Path "$($netDrive)\rn.txt"
 			foreach ($rn in $rns)
 			{
 				Add-ADGroupMember -Identity $rn -Members $sam
@@ -230,7 +279,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "NP" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# np.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$nps = Get-Content -Path '.\debloat files\np.txt'
+			$nps = Get-Content -Path "$($netDrive)\np.txt"
 			foreach ($np in $nps)
 			{
 				Add-ADGroupMember -Identity $np -Members $sam
@@ -243,7 +292,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "LPN" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# lpn.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$lpns = Get-Content -Path '.\debloat files\lpn.txt'
+			$lpns = Get-Content -Path "$($netDrive)\lpn.txt"
 			foreach ($lpn in $lpns)
 			{
 				Add-ADGroupMember -Identity $lpn -Members $sam
@@ -256,7 +305,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "Chaplain" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# chap.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$chaps = Get-Content -Path '.\debloat files\chap.txt'
+			$chaps = Get-Content -Path "$($netDrive)\chap.txt"
 			foreach ($chap in $chaps)
 			{
 				Add-ADGroupMember -Identity $chap -Members $sam
@@ -269,7 +318,7 @@ function createNewUser{
 			New-ADUser -Name $fullname -DisplayName $fullname -GivenName $firstname -Surname $lastname -SamAccountName $sam -UserPrincipalName $upn -EmailAddress $upn -Description "SW" -AccountPassword($newpassword)
 			Enable-ADAccount -Identity $sam
 			# sw.txt : just a list of groups a person in this role should belong to, each group on a new line
-			$sws = Get-Content -Path '.\debloat files\sw.txt'
+			$sws = Get-Content -Path "$($netDrive)\sw.txt"
 			foreach ($sw in $sws)
 			{
 				Add-ADGroupMember -Identity $sw -Members $sam
@@ -294,7 +343,7 @@ function createNewUser{
 			Set-ADUser -Identity $sam -PasswordNeverExpires:$TRUE
 
 			# everyonegroups.txt : just a list of groups everyone goes in, each group on a new line
-			$egs = Get-Content -Path '.\debloat files\everyonegroups.txt'
+			$egs = Get-Content -Path "$($netDrive)\everyonegroups.txt"
 			foreach ($eg in $egs)
 			{
 				Add-ADGroupMember -Identity $eg -Members $sam
@@ -306,12 +355,6 @@ function createNewUser{
 			Get-ADPrincipalGroupMembership $sam | Select name | Sort-Object -property name | ForEach-Object {$groups += " $_ "}
 			$groupsmess = $groups -replace ' @{name=', ''
 			$groups = $groupsmess -replace '}', ','
-
-			# add the created user's info to a temp holding file
-			Add-Content $global:tempFile $firstname
-			Add-Content $global:tempFile $lastname
-			Add-Content $global:tempFile $role
-			Add-Content $global:tempFile $upn
 
 			# $($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)"
 
@@ -326,12 +369,6 @@ function createNewUser{
 				[System.Windows.Forms.MessageBox]::Show("non-standard account name found! `n Please note the users login will be $sam `n $fullname user account created for role $role" , "Warning!")
 			}
 		}
-	}
-
-	# else inform the user the token must be set first
-	else
-	{
-		[System.Windows.Forms.MessageBox]::Show("No new employee token found. Please run Create-Token.ps1" , "Warning!")
 	}
 
 	$form2 = New-Object system.Windows.Forms.Form
@@ -352,52 +389,51 @@ function createQliqImport
 	Add-Content $file ("First Name,Mid Name,Last Name,Email/Mobile,Title,Department,Full Group Access, Mobile App Login, Broadcasting, Group Messaging, Group1, Group2,Group3,Password")
 
 
-	$content = Get-Content $global:tempFile
 	for ($i = 0; $i -lt $content.length; $i = $i + 4)
 	{
-		$first = $content[$i]
-		$last = $content[$i+1]
-		$role = $content[$i+2]
-		$upn = $content[$i+3]
+		$first = $global:gfirst
+		$last  = $global:glast 
+		$role  = $global:grole 
+		$upn   = $global:gupn 
 
 		if ($role -eq "IPU CNA") 
 		{
-			$word = Get-Content ".\debloat files\qliqcna.txt"
+			$word = Get-Content "$($netDrive)\qliqcna.txt"
 			$addL = "$($first),,$($last),$($upn),($(role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)"
 		}
 		elseif ($role -eq "IPU RN")
 		{
-			$word = Get-Content ".\debloat files\qliqrn.txt"
+			$word = Get-Content "$($netDrive)\qliqrn.txt"
 			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,IPU All Staff,Emergency Group,,$($word)"
 		}
 		elseif ($role -eq "CNA")
 		{
-			$word = Get-Content ".\debloat files\qliqcna.txt"
+			$word = Get-Content "$($netDrive)\qliqcna.txt"
 			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,CNAs (Field Only),$($word)"
 		}
 		elseif (($role -eq "RN") -or ($role -eq "LPN"))
 		{
-			$word = Get-Content ".\debloat files\qliqrn.txt"
+			$word = Get-Content "$($netDrive)\qliqrn.txt"
 			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Nurses (Field Only),$($word)"
 		}
 		elseif ($role -eq "NP")
 		{
-			$word = Get-Content ".\debloat files\qliqrn.txt"
+			$word = Get-Content "$($netDrive)\qliqrn.txt"
 			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,NPs (HC only),$($word)"
 		}
 		elseif ($role -eq "Social Worker")
 		{
-			$word = Get-Content ".\debloat files\qliqsw.txt"
+			$word = Get-Content "$($netDrive)\qliqsw.txt"
 			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)"
 		}
 		elseif ($role -eq "Chaplain")
 		{
-			$word = Get-Content ".\debloat files\qliqsw.txt"
+			$word = Get-Content "$($netDrive)\qliqsw.txt"
 			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,Social Services (All),$($word)"
 		}
 		else
 		{
-			$word = Get-Content ".\debloat files\qliqad.txt"
+			$word = Get-Content "$($netDrive)\qliqad.txt"
 			$addL = "$($first),,$($last),$($upn),$($role),,y,y,n,y,All Group Daily Messaging,Emergency Group,,$($word)"
 		}
 		Add-Content $file $addL
@@ -408,12 +444,12 @@ function createQliqImport
 # once all new accounts are added, this will sync AD,export a Qliq CSV, and exit
 function syncExit 
 {
-	if (Test-Path "\script\psexec.exe")
+	if (Test-Path "$($netDrive)\psexec.exe")
 	{
 		Write-Output "psexe  $(Get-Date) " >> ".\atemplog.txt"
 		# psexec.txt : a simple command that forces an Exchange 365 sync with on-site AD. Not required but is faster
-		$psexe = Get-Content -Path '.\debloat files\psexec.txt' 
-		Start-Process -FilePath PSExec -ArgumentList $psexe
+		$psexe = Get-Content -Path "$($netDrive)\psexec.txt"
+		Start-Process -FilePath "$($netDrive)\psexec.exe" -ArgumentList $psexe
 	}
 	else 
 	{
