@@ -1,14 +1,54 @@
 # Alan Bishop 
-# modified 5/13/2021
+# modified 6/21/2021
 #
-# connects this session to Exchange Online, intended to be a helper script but can be run solo
+# connects this PS session to Exchange Online, intended to be a helper script but can be run solo
 #
-# the following must be installed first:
+# the following must be installed first (script will attempt to install automatically):
 #      .\required addons\msoidcli_64.msi  (MS Online Services Sign-In Assistant)
 #      install-module -name AzureAD
 #      install-module MSOnline
 # new version requires:
-#	   install-module -name exchangeonlinemanagement
+#	   install-module -name ExchangeOnlineManagement
+
+
+# check to see where the scripts are being run from
+if (Test-Path "c:\script\Give-EmailAccess.ps1")
+{
+	$sPath = "c:\script\"
+}
+elseif (Test-Path "c:\script\ps1\Give-EmailAccess.ps1")
+{
+	$sPath = "c:\script\ps1"
+}
+else
+{
+	Write-Output "difficulty locating PS1 path"
+}
+
+# setup some var's to check if the required modules are installed
+$checkAzureAD 				 = (Get-Module AzureAD -ListAvailable).Name
+$checkMSOnline 			 = (Get-Module MSOnline -ListAvailable).Name
+$checkExchangeOnlineManagement = (Get-Module ExchangeOnlineManagement -ListAvailable).Name
+
+# if AzureAD module isn't installed, install it
+if ($checkAzureAD -eq $null)
+{
+	Write-Host "Important: AzureAD Powershell module must be installed to continue "
+	Install-Module AzureAD -Repository PSGallery -AllowClobber -Force
+}
+# if MSOnline module isn't installed, install it
+if ($checkMSOnline -eq $null)
+{
+	Write-Host "Important: MSOnline Powershell module must be installed to continue "
+	Install-Module MSOnline -Repository PSGallery -AllowClobber -Force
+}
+# if ExchangeOnlineManagement module isn't installed, install it
+if ($checkExchangeOnlineManagement -eq $null)
+{
+	Write-Host "Important: ExchangeOnlineManagement Powershell module must be installed to continue "
+	Install-Module ExchangeOnlineManagement -Repository PSGallery -AllowClobber -Force
+}
+
 
 # the token we'll be working with, based on current logged in user
 $token = "$($env:userprofile)\$($env:username).enc"
@@ -16,14 +56,31 @@ $token = "$($env:userprofile)\$($env:username).enc"
 # if the token is saved
 if(test-path $token)
 {
+	Write-Output "token found $($env:username)"
+	
 	# load user credentials
-	$name = Get-Content -Path '.\debloat files\email.txt'
-	$name = $env:username+$name
+	$SAM = $env:username
+	# special cases for users without email account on elevated accounts
+	if (($SAM -eq "adminnia") -or ($SAM -eq "atest"))
+	{
+		$name = Get-Content -Path 'c:\script\debloat files\emailna.txt'
+		$name = "$($SAM)$($name)"
+	}
+	# if not special case, use default domain
+	else
+	{
+		$name = Get-Content -Path 'c:\script\debloat files\email.txt'
+		$name = "$($SAM)$($name)"
+	}
+
+	# pull credentials from token file
 	$pass = Get-Content $token | ConvertTo-SecureString
 	$cred = new-object -typename System.Management.Automation.PSCredential -argumentlist $name, $pass
 
 	# connect to Exchange Online and Azure AD
+	# considering separating these out to speed up run time, Connect-ExchangeOnline takes 7.87 seconds
 	Connect-ExchangeOnline -Credential $cred
+	# Connect-MsolServer takes 1.75 seconds   (  both tested using Measure-Command {command}  )
 	Connect-MsolService -Credential $cred
 
 	# old connection style, will remove once fully deprecated
@@ -37,17 +94,17 @@ if(test-path $token)
 else
 {
 	# handling a special case
-	$userSwap = Get-Content ".\debloat files\exchangeswap.txt"
+	$userSwap = Get-Content "c:\script\debloat files\exchangeswap.txt"
 	if ($env:username -eq $userSwap[0])
 	{
 		$username = $userSwap[1]
 	}
 
-	# create a token then try to run this script again
-	.\tokenpassword.ps1 "gui" $env:username "Verify username is an administrator account for connecting to email server"
-	.\exchangeconnect.ps1
+	$tPath = "$($sPath)tokenpassword.ps1" 
+	& $tPath gui $env:username 'Verify username is an administrator account for connecting to email server'
+	& "$($sPath)exchangeconnect.ps1"
 }
 
 
-echo "current active sessions: "
-get-pssession
+Write-Output "current active sessions: "
+Get-PSSession
